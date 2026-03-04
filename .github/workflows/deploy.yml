@@ -10,6 +10,46 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Upload backend (and compose) to server
+        uses: burnett01/rsync-deployments@v7.0.1
+        with:
+          switches: -avz --delete --exclude='.git' --exclude='frontend/node_modules' --exclude='frontend/dist'
+          path: .
+          remote_path: /var/www/mail
+          remote_host: ${{ secrets.SSH_HOST }}
+          remote_user: ${{ secrets.SSH_USER }}
+          remote_port: ${{ secrets.SSH_PORT }}
+          remote_key: ${{ secrets.SSH_KEY }}
+
+      - name: Upload frontend build to server
+        uses: burnett01/rsync-deployments@v7.0.1
+        with:
+          switches: -avz --delete
+          path: frontend/dist/
+          remote_path: /var/www/mail/html
+          remote_host: ${{ secrets.SSH_HOST }}
+          remote_user: ${{ secrets.SSH_USER }}
+          remote_port: ${{ secrets.SSH_PORT }}
+          remote_key: ${{ secrets.SSH_KEY }}
+
       - name: Run docker compose up -d --build
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -20,16 +60,8 @@ jobs:
           script: |
             set -e
 
-            # Repo ожидается в /var/www/mail/mail
-            # Если его нет — просто клонируем (без удаления директорий, чтобы не ловить Permission denied)
-            if [ ! -d /var/www/mail/mail/.git ]; then
-              mkdir -p /var/www/mail
-              cd /var/www/mail
-              if [ ! -d mail ]; then
-                git clone https://github.com/volchonok16/mail.git mail
-              fi
-            fi
-
-            cd /var/www/mail/mail
-            git pull
+            # Файлы приложения уже скопированы rsync в /var/www/mail
+            # Просто заходим в директорию и запускаем docker compose
+            mkdir -p /var/www/mail
+            cd /var/www/mail
             echo "${{ secrets.SUDO_PASSWORD }}" | sudo -S docker compose up -d --build

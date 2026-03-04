@@ -78,20 +78,6 @@ services:
       - mail_network
     restart: unless-stopped
 
-  # Frontend
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: mail_frontend
-    ports:
-      - "127.0.0.1:17080:80"  # Frontend только для localhost (nginx проксирует)
-    depends_on:
-      - backend
-    networks:
-      - mail_network
-    restart: unless-stopped
-
 volumes:
   postgres_data:
   minio_data:
