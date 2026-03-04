@@ -501,6 +501,31 @@ tbody tr:hover {
   margin-bottom: 1rem;
 }
 
+.template-type-group {
+  display: inline-flex;
+  gap: 0.5rem;
+  background: rgba(15, 23, 42, 0.9);
+  border-radius: 999px;
+  padding: 0.25rem;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+}
+
+.type-pill {
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  padding: 0.35rem 0.9rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.type-pill.active {
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+  color: var(--color-text);
+}
+
 @media (max-width: 768px) {
   .admin-nav {
     padding: 0.75rem 1rem;

@@ -615,19 +615,29 @@ export default function AdminDashboard() {
                     </div>
                     <div className="form-group">
                       <label>Тип шаблона</label>
-                      <select
-                        value={templateForm.type}
-                        onChange={(e) =>
-                          setTemplateForm({
-                            ...templateForm,
-                            type: e.target.value as TemplateType,
-                          })
-                        }
-                      >
-                        <option value="body">Основное письмо</option>
-                        <option value="signature">Подпись</option>
-                        <option value="other">Другое</option>
-                      </select>
+                      <div className="template-type-group">
+                        <button
+                          type="button"
+                          className={`type-pill ${templateForm.type === 'body' ? 'active' : ''}`}
+                          onClick={() => setTemplateForm({ ...templateForm, type: 'body' })}
+                        >
+                          Основное письмо
+                        </button>
+                        <button
+                          type="button"
+                          className={`type-pill ${templateForm.type === 'signature' ? 'active' : ''}`}
+                          onClick={() => setTemplateForm({ ...templateForm, type: 'signature' })}
+                        >
+                          Подпись
+                        </button>
+                        <button
+                          type="button"
+                          className={`type-pill ${templateForm.type === 'other' ? 'active' : ''}`}
+                          onClick={() => setTemplateForm({ ...templateForm, type: 'other' })}
+                        >
+                          Другое
+                        </button>
+                      </div>
                     </div>
                     <div className="form-group">
                       <label>Описание (необязательно)</label>
