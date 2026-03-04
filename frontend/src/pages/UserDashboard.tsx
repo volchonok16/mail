@@ -134,6 +134,10 @@ export default function UserDashboard() {
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault()
+    if (!composeData.body && !composeData.html_body) {
+      alert('Нужно указать либо текст письма, либо HTML (шаблон).')
+      return
+    }
     sendMutation.mutate({ ...composeData, attachments })
   }
 
@@ -329,7 +333,6 @@ export default function UserDashboard() {
                   onChange={(e) => setComposeData({ ...composeData, body: e.target.value })}
                   placeholder="Текст письма..."
                   rows={10}
-                  required
                 />
               </div>
 
@@ -364,6 +367,14 @@ export default function UserDashboard() {
                     <div className="html-preview-label">Предпросмотр HTML</div>
                     <div
                       className="html-preview-body"
+                      contentEditable
+                      suppressContentEditableWarning
+                      onInput={(e) =>
+                        setComposeData({
+                          ...composeData,
+                          html_body: (e.currentTarget as HTMLDivElement).innerHTML,
+                        })
+                      }
                       dangerouslySetInnerHTML={{ __html: composeData.html_body }}
                     />
                   </div>
