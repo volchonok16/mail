@@ -31,7 +31,7 @@ jobs:
         with:
           switches: -avz --delete --exclude='.git' --exclude='frontend/node_modules' --exclude='frontend/dist'
           path: .
-          remote_path: /var/www/mail
+          remote_path: /home/${{ secrets.SSH_USER }}/mail-deploy
           remote_host: ${{ secrets.SSH_HOST }}
           remote_user: ${{ secrets.SSH_USER }}
           remote_port: ${{ secrets.SSH_PORT }}
@@ -42,7 +42,7 @@ jobs:
         with:
           switches: -avz --delete
           path: frontend/dist/
-          remote_path: /var/www/mail/html
+          remote_path: /home/${{ secrets.SSH_USER }}/mail-html
           remote_host: ${{ secrets.SSH_HOST }}
           remote_user: ${{ secrets.SSH_USER }}
           remote_port: ${{ secrets.SSH_PORT }}
@@ -58,8 +58,15 @@ jobs:
           script: |
             set -e
 
-            # Файлы приложения уже скопированы rsync в /var/www/mail
-            # Просто заходим в директорию и запускаем docker compose
-            mkdir -p /var/www/mail
+            # Файлы приложения скопированы rsync в домашнюю директорию пользователя
+            BACKEND_SRC="$HOME/mail-deploy"
+            FRONTEND_SRC="$HOME/mail-html"
+
+            # Перекладываем файлы в /var/www/mail под sudo и запускаем docker compose
+            echo "${{ secrets.SUDO_PASSWORD }}" | sudo -S mkdir -p /var/www/mail /var/www/mail/html
+
+            echo "${{ secrets.SUDO_PASSWORD }}" | sudo -S rsync -avz --delete "$BACKEND_SRC"/ /var/www/mail/
+            echo "${{ secrets.SUDO_PASSWORD }}" | sudo -S rsync -avz --delete "$FRONTEND_SRC"/ /var/www/mail/html/
+
             cd /var/www/mail
             echo "${{ secrets.SUDO_PASSWORD }}" | sudo -S docker compose up -d --build
