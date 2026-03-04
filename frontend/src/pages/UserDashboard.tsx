@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
@@ -50,7 +50,6 @@ export default function UserDashboard() {
   const [templatesTab, setTemplatesTab] = useState<TemplateType>('body')
   const [selectedTemplateIds, setSelectedTemplateIds] = useState<number[]>([])
   const [attachments, setAttachments] = useState<File[]>([])
-  const htmlPreviewRef = useRef<HTMLDivElement | null>(null)
 
   // Fetch inbox
   const { data: inbox } = useQuery({
@@ -138,10 +137,7 @@ export default function UserDashboard() {
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault()
 
-    let currentHtml =
-      htmlPreviewRef.current?.innerHTML != null
-        ? htmlPreviewRef.current.innerHTML
-        : composeData.html_body
+    let currentHtml = composeData.html_body
 
     if (!composeData.body && !currentHtml) {
       alert('Нужно указать либо текст письма, либо HTML (шаблон).')
@@ -431,12 +427,9 @@ export default function UserDashboard() {
                   rows={6}
                 />
                 <div className="html-preview">
-                  <div className="html-preview-label">Предпросмотр HTML (можно редактировать)</div>
+                  <div className="html-preview-label">Предпросмотр HTML</div>
                   <div
-                    ref={htmlPreviewRef}
                     className="html-preview-body"
-                    contentEditable
-                    suppressContentEditableWarning
                     dangerouslySetInnerHTML={{ __html: composeData.html_body || '' }}
                   />
                 </div>
