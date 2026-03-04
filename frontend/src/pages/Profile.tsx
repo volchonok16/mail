@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import api from '../api/axios'
 import { ArrowLeft, Upload, Save } from 'lucide-react'
+import { ThemeSwitch } from '../components/ThemeSwitch'
 import './Profile.css'
 
 export default function Profile() {
@@ -105,6 +106,9 @@ export default function Profile() {
           Назад
         </button>
         <h1>Профиль</h1>
+        <div className="profile-header-right">
+          <ThemeSwitch />
+        </div>
       </div>
 
       <div className="profile-content">

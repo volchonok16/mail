@@ -9,6 +9,7 @@
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 1rem;
 }
 
@@ -34,6 +35,10 @@
 .profile-header h1 {
   color: var(--color-text);
   font-size: 1.75rem;
+}
+
+.profile-header-right {
+  margin-left: auto;
 }
 
 .profile-content {

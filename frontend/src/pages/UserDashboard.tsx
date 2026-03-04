@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import api from '../api/axios'
 import { Mail, Send, Inbox, LogOut, User, RefreshCw, Users, FileText } from 'lucide-react'
+import { ThemeSwitch } from '../components/ThemeSwitch'
 import './UserDashboard.css'
 
 interface Email {
@@ -190,6 +191,7 @@ export default function UserDashboard() {
           </div>
         </div>
         <div className="nav-actions">
+          <ThemeSwitch />
           {user?.is_admin && (
             <button onClick={() => navigate('/admin')} className="btn-admin-panel">
               <Users size={20} />

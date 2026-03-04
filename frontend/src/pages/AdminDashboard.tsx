@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import api from '../api/axios'
 import { Users, LogOut, UserPlus, Trash2, Edit, Shield, ShieldOff, Mail, FileText } from 'lucide-react'
+import { ThemeSwitch } from '../components/ThemeSwitch'
 import './AdminDashboard.css'
 
 interface User {
@@ -272,6 +273,7 @@ export default function AdminDashboard() {
           <span className="domain">alexol.io</span>
         </div>
         <div className="nav-user">
+          <ThemeSwitch />
           <span>{user?.email}</span>
           <button
             onClick={() => {

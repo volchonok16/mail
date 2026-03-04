@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import api from '../api/axios'
 import { Users, Mail, X } from 'lucide-react'
+import { ThemeSwitch } from '../components/ThemeSwitch'
 import './Login.css'
 
 export default function Login() {
@@ -53,6 +54,10 @@ export default function Login() {
   return (
     <div className="login-container">
       <div className="login-box">
+        <div className="login-header-row">
+          <div />
+          <ThemeSwitch />
+        </div>
         <h1>Почтовый сервер</h1>
         <h2>alexol.io</h2>
         

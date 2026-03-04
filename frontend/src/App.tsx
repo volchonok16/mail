@@ -1,7 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
-import { Sun, Moon } from 'lucide-react'
 import { useAuthStore } from './store/authStore'
-import { useThemeStore } from './store/themeStore'
 import Login from './pages/Login'
 import AdminDashboard from './pages/AdminDashboard'
 import UserDashboard from './pages/UserDashboard'
@@ -21,76 +19,55 @@ function ProtectedRoute({ children, adminOnly = false }: { children: React.React
   return <>{children}</>
 }
 
-function ThemeToggle() {
-  const theme = useThemeStore((state) => state.theme)
-  const toggleTheme = useThemeStore((state) => state.toggleTheme)
-
-  const isDark = theme === 'dark'
-
-  return (
-    <button
-      type="button"
-      className="theme-toggle"
-      onClick={toggleTheme}
-      aria-label={isDark ? 'Включить светлую тему' : 'Включить тёмную тему'}
-    >
-      {isDark ? <Sun size={18} /> : <Moon size={18} />}
-    </button>
-  )
-}
-
 function App() {
   const { token, user } = useAuthStore()
   
   return (
-    <>
-      <Router>
-        <Routes>
-          <Route
-            path="/login"
-            element={token ? <Navigate to={user?.is_admin ? '/admin' : '/dashboard'} /> : <Login />}
-          />
-          
-          <Route
-            path="/admin"
-            element={
-              <ProtectedRoute adminOnly>
-                <AdminDashboard />
-              </ProtectedRoute>
-            }
-          />
-          
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute>
-                <UserDashboard />
-              </ProtectedRoute>
-            }
-          />
-          
-          <Route
-            path="/profile"
-            element={
-              <ProtectedRoute>
-                <Profile />
-              </ProtectedRoute>
-            }
-          />
-          
-          <Route
-            path="/"
-            element={
-              <Navigate
-                to={token ? (user?.is_admin ? '/admin' : '/dashboard') : '/login'}
-                replace
-              />
-            }
-          />
-        </Routes>
-      </Router>
-      <ThemeToggle />
-    </>
+    <Router>
+      <Routes>
+        <Route
+          path="/login"
+          element={token ? <Navigate to={user?.is_admin ? '/admin' : '/dashboard'} /> : <Login />}
+        />
+        
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute adminOnly>
+              <AdminDashboard />
+            </ProtectedRoute>
+          }
+        />
+        
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <UserDashboard />
+            </ProtectedRoute>
+          }
+        />
+        
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute>
+              <Profile />
+            </ProtectedRoute>
+          }
+        />
+        
+        <Route
+          path="/"
+          element={
+            <Navigate
+              to={token ? (user?.is_admin ? '/admin' : '/dashboard') : '/login'}
+              replace
+            />
+          }
+        />
+      </Routes>
+    </Router>
   )
 }
 
