@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File
+from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -6,6 +6,7 @@ from datetime import timedelta
 from typing import List, Optional
 import io
 import uuid
+import asyncio
 
 from app.database import get_db, engine, Base, AsyncSessionLocal
 from app.models import User, Email, EmailTemplate
@@ -33,6 +34,7 @@ import smtplib
 import httpx
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.application import MIMEApplication
 
 app = FastAPI(title="Mail Server API")
 
@@ -310,29 +312,190 @@ async def upload_avatar(
     
     return {"avatar_url": avatar_url}
 
-# Email endpoints
+def _build_and_send_email_message(
+    *,
+    current_user: User,
+    to_address: str,
+    subject: str,
+    body: str,
+    html_body: Optional[str],
+    attachments: Optional[List[tuple]] = None,
+):
+    """
+    Build MIME message (with optional attachments) and return (msg, sender_callable_or_coroutine).
+    attachments: list of tuples (filename, content_type, bytes_content).
+    """
+    if attachments:
+        msg = MIMEMultipart("mixed")
+        alternative = MIMEMultipart("alternative")
+        msg.attach(alternative)
+    else:
+        msg = MIMEMultipart("alternative")
+        alternative = msg
+
+    msg["From"] = current_user.email
+    msg["To"] = to_address
+    msg["Subject"] = subject
+
+    text_part = MIMEText(body, "plain")
+    alternative.attach(text_part)
+
+    if html_body:
+        html_part = MIMEText(html_body, "html")
+        alternative.attach(html_part)
+
+    if attachments:
+        for filename, content_type, content in attachments:
+            part = MIMEApplication(content, Name=filename)
+            part.add_header(
+                "Content-Disposition", "attachment", filename=filename
+            )
+            if content_type:
+                part.add_header("Content-Type", content_type)
+            msg.attach(part)
+
+    print(f"[EMAIL] Starting send process: from={current_user.email}, to={to_address}")
+    try:
+        recipient_domain = to_address.split("@")[1] if "@" in to_address else None
+
+        if not recipient_domain:
+            raise HTTPException(status_code=400, detail="Invalid recipient email address")
+
+        print(
+            f"[EMAIL] Recipient domain: {recipient_domain}, Mail domain: {settings.MAIL_DOMAIN}"
+        )
+        print(
+            f"[EMAIL] SMTP_RELAY_ENABLED: {settings.SMTP_RELAY_ENABLED}, SMTP_RELAY_HOST: {settings.SMTP_RELAY_HOST}"
+        )
+
+        if (
+            recipient_domain != settings.MAIL_DOMAIN.replace("@", "")
+            and settings.SMTP_RELAY_ENABLED
+            and settings.SMTP_RELAY_HOST
+        ):
+            use_sendgrid_api = (
+                settings.SENDGRID_USE_API
+                and settings.SMTP_RELAY_HOST
+                and "sendgrid" in settings.SMTP_RELAY_HOST.lower()
+                and settings.SMTP_RELAY_PASSWORD
+            )
+            if use_sendgrid_api:
+                print(
+                    f"[EMAIL] Sending via SendGrid API (HTTPS) to {to_address}"
+                )
+                try:
+                    payload = {
+                        "personalizations": [{"to": [{"email": to_address}]}],
+                        "from": {
+                            "email": current_user.email,
+                            "name": current_user.full_name or current_user.email,
+                        },
+                        "subject": subject,
+                        "content": [{"type": "text/plain", "value": body or ""}],
+                    }
+                    if html_body:
+                        payload["content"].append(
+                            {"type": "text/html", "value": html_body}
+                        )
+                    import httpx  # local import to avoid circular issues
+
+                    async def _send_via_sendgrid():
+                        async with httpx.AsyncClient(timeout=30.0) as client:
+                            r = await client.post(
+                                "https://api.sendgrid.com/v3/mail/send",
+                                json=payload,
+                                headers={
+                                    "Authorization": f"Bearer {settings.SMTP_RELAY_PASSWORD}",
+                                    "Content-Type": "application/json",
+                                },
+                            )
+                        if r.status_code >= 400:
+                            raise Exception(f"SendGrid API {r.status_code}: {r.text}")
+
+                    return msg, _send_via_sendgrid
+                except Exception as api_err:
+                    print(f"[EMAIL] SendGrid API error: {api_err}")
+                    raise
+            else:
+                print(f"[EMAIL] Sending via SMTP Relay to {to_address}")
+                print(
+                    f"[EMAIL] Relay config: {settings.SMTP_RELAY_HOST}:{settings.SMTP_RELAY_PORT}, user: {settings.SMTP_RELAY_USER}"
+                )
+
+                def _send_via_relay():
+                    with smtplib.SMTP(
+                        settings.SMTP_RELAY_HOST, settings.SMTP_RELAY_PORT
+                    ) as smtp:
+                        if settings.SMTP_RELAY_USE_TLS:
+                            smtp.starttls()
+                        if settings.SMTP_RELAY_USER and settings.SMTP_RELAY_PASSWORD:
+                            smtp.login(
+                                settings.SMTP_RELAY_USER, settings.SMTP_RELAY_PASSWORD
+                            )
+                        smtp.send_message(msg)
+
+                return msg, _send_via_relay
+        else:
+            print(
+                f"[EMAIL] Using direct SMTP (not using relay). Reason: domain={recipient_domain}, mail_domain={settings.MAIL_DOMAIN}, relay_enabled={settings.SMTP_RELAY_ENABLED}, relay_host={settings.SMTP_RELAY_HOST}"
+            )
+            import dns.resolver
+
+            def _send_direct():
+                try:
+                    mx_records = dns.resolver.resolve(recipient_domain, "MX")
+                    mx_records = sorted(mx_records, key=lambda r: r.preference)
+                    sent = False
+                    for mx in mx_records:
+                        mx_host = str(mx.exchange).rstrip(".")
+                        try:
+                            with smtplib.SMTP(mx_host, 25, timeout=30) as smtp:
+                                smtp.send_message(msg)
+                            sent = True
+                            break
+                        except Exception as mx_error:
+                            print(f"Failed to send via {mx_host}: {mx_error}")
+                            continue
+                    if not sent:
+                        raise Exception("All MX servers failed")
+                except dns.resolver.NXDOMAIN:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Domain {recipient_domain} does not exist",
+                    )
+                except dns.resolver.NoAnswer:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"No MX records found for {recipient_domain}",
+                    )
+                except Exception as dns_error:
+                    if recipient_domain == settings.MAIL_DOMAIN.replace("@", ""):
+                        with smtplib.SMTP("localhost", settings.SMTP_PORT) as smtp:
+                            smtp.send_message(msg)
+                    else:
+                        raise HTTPException(
+                            status_code=500,
+                            detail=f"Failed to send email: {str(dns_error)}",
+                        )
+
+            return msg, _send_direct
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Could not prepare email for sending: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to send email: {str(e)}",
+        )
+
+
 @app.post("/api/emails/send")
 async def send_email(
     email_data: EmailCreate,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
-    """Send email"""
-    # Create email message
-    msg = MIMEMultipart('alternative')
-    msg['From'] = current_user.email
-    msg['To'] = email_data.to_address
-    msg['Subject'] = email_data.subject
-    
-    # Add text body
-    text_part = MIMEText(email_data.body, 'plain')
-    msg.attach(text_part)
-    
-    # Add HTML body if provided
-    if email_data.html_body:
-        html_part = MIMEText(email_data.html_body, 'html')
-        msg.attach(html_part)
-    
+    """Send email without attachments (JSON payload)"""
     # Save to database as sent
     email_obj = Email(
         user_id=current_user.id,
@@ -345,129 +508,32 @@ async def send_email(
     )
     db.add(email_obj)
     await db.commit()
-    
-    # Send email
-    print(f"[EMAIL] Starting send process: from={current_user.email}, to={email_data.to_address}")
-    try:
-        # Определяем домен получателя
-        recipient_domain = email_data.to_address.split('@')[1] if '@' in email_data.to_address else None
-        
-        if not recipient_domain:
-            raise HTTPException(status_code=400, detail="Invalid recipient email address")
-        
-        print(f"[EMAIL] Recipient domain: {recipient_domain}, Mail domain: {settings.MAIL_DOMAIN}")
-        print(f"[EMAIL] SMTP_RELAY_ENABLED: {settings.SMTP_RELAY_ENABLED}, SMTP_RELAY_HOST: {settings.SMTP_RELAY_HOST}")
-        
-        # Если настроен SMTP Relay - используем его для всех внешних доменов
-        if recipient_domain != settings.MAIL_DOMAIN.replace('@', '') and settings.SMTP_RELAY_ENABLED and settings.SMTP_RELAY_HOST:
-            # SendGrid: предпочитаем HTTP API (порт 443), т.к. на сервере часто блокируют исходящий 587
-            use_sendgrid_api = (
-                settings.SENDGRID_USE_API
-                and settings.SMTP_RELAY_HOST and "sendgrid" in settings.SMTP_RELAY_HOST.lower()
-                and settings.SMTP_RELAY_PASSWORD
-            )
-            if use_sendgrid_api:
-                print(f"[EMAIL] Sending via SendGrid API (HTTPS) to {email_data.to_address}")
-                try:
-                    payload = {
-                        "personalizations": [{"to": [{"email": email_data.to_address}]}],
-                        "from": {"email": current_user.email, "name": current_user.full_name or current_user.email},
-                        "subject": email_data.subject,
-                        "content": [{"type": "text/plain", "value": email_data.body or ""}],
-                    }
-                    if email_data.html_body:
-                        payload["content"].append({"type": "text/html", "value": email_data.html_body})
-                    async with httpx.AsyncClient(timeout=30.0) as client:
-                        r = await client.post(
-                            "https://api.sendgrid.com/v3/mail/send",
-                            json=payload,
-                            headers={
-                                "Authorization": f"Bearer {settings.SMTP_RELAY_PASSWORD}",
-                                "Content-Type": "application/json",
-                            },
-                        )
-                    if r.status_code >= 400:
-                        raise Exception(f"SendGrid API {r.status_code}: {r.text}")
-                    print(f"[EMAIL] Successfully sent via SendGrid API to {email_data.to_address}")
-                except Exception as api_err:
-                    print(f"[EMAIL] SendGrid API error: {api_err}")
-                    raise
-            else:
-                # Отправка через SMTP Relay
-                print(f"[EMAIL] Sending via SMTP Relay to {email_data.to_address}")
-                print(f"[EMAIL] Relay config: {settings.SMTP_RELAY_HOST}:{settings.SMTP_RELAY_PORT}, user: {settings.SMTP_RELAY_USER}")
-                try:
-                    with smtplib.SMTP(settings.SMTP_RELAY_HOST, settings.SMTP_RELAY_PORT) as smtp:
-                        if settings.SMTP_RELAY_USE_TLS:
-                            smtp.starttls()
-                        if settings.SMTP_RELAY_USER and settings.SMTP_RELAY_PASSWORD:
-                            smtp.login(settings.SMTP_RELAY_USER, settings.SMTP_RELAY_PASSWORD)
-                        smtp.send_message(msg)
-                        print(f"[EMAIL] Successfully sent via SMTP Relay to {email_data.to_address}")
-                except Exception as relay_error:
-                    print(f"[EMAIL] SMTP Relay error: {relay_error}")
-                    raise
-        else:
-            print(f"[EMAIL] Using direct SMTP (not using relay). Reason: domain={recipient_domain}, mail_domain={settings.MAIL_DOMAIN}, relay_enabled={settings.SMTP_RELAY_ENABLED}, relay_host={settings.SMTP_RELAY_HOST}")
-            # Прямая отправка через DNS MX lookup
-            # Работает для внутренних доменов и всех внешних (если настроены DNS)
-            import dns.resolver
-            
-            try:
-                # Получаем MX записи для домена получателя
-                mx_records = dns.resolver.resolve(recipient_domain, 'MX')
-                mx_records = sorted(mx_records, key=lambda r: r.preference)
-                
-                # Пробуем отправить через первый доступный MX сервер
-                sent = False
-                for mx in mx_records:
-                    mx_host = str(mx.exchange).rstrip('.')
-                    try:
-                        with smtplib.SMTP(mx_host, 25, timeout=30) as smtp:
-                            smtp.send_message(msg)
-                        sent = True
-                        break
-                    except Exception as mx_error:
-                        print(f"Failed to send via {mx_host}: {mx_error}")
-                        continue
-                
-                if not sent:
-                    raise Exception("All MX servers failed")
-                    
-            except dns.resolver.NXDOMAIN:
-                raise HTTPException(status_code=400, detail=f"Domain {recipient_domain} does not exist")
-            except dns.resolver.NoAnswer:
-                raise HTTPException(status_code=400, detail=f"No MX records found for {recipient_domain}")
-            except Exception as dns_error:
-                # Fallback для локальных доменов
-                if recipient_domain == settings.MAIL_DOMAIN.replace('@', ''):
-                    with smtplib.SMTP('localhost', settings.SMTP_PORT) as smtp:
-                        smtp.send_message(msg)
-                else:
-                    raise HTTPException(
-                        status_code=500,
-                        detail=f"Failed to send email: {str(dns_error)}"
-                    )
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"Could not send email: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to send email: {str(e)}"
-        )
-    
+
+    msg, sender = _build_and_send_email_message(
+        current_user=current_user,
+        to_address=email_data.to_address,
+        subject=email_data.subject,
+        body=email_data.body,
+        html_body=email_data.html_body,
+        attachments=None,
+    )
+
+    send_callable = sender
+    if asyncio.iscoroutinefunction(send_callable):
+        await send_callable()
+    else:
+        send_callable()
+
     return {"message": "Email sent successfully", "email_id": email_obj.id}
 
 
 @app.get("/api/templates", response_model=List[EmailTemplateResponse])
 async def list_templates(
     template_type: Optional[str] = None,
-    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """List email templates for current user (optionally filtered by type)"""
-    query = select(EmailTemplate).where(EmailTemplate.user_id == current_user.id)
+    """List all email templates (optionally filtered by type). Accessible to all authenticated users."""
+    query = select(EmailTemplate)
     if template_type:
         query = query.where(EmailTemplate.type == template_type)
 
@@ -479,12 +545,12 @@ async def list_templates(
 @app.post("/api/templates", response_model=EmailTemplateResponse)
 async def create_template(
     template_data: EmailTemplateCreate,
-    current_user: User = Depends(get_current_user),
+    admin: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Create a new email template for current user"""
+    """Create a new email template (admin only)"""
     template = EmailTemplate(
-        user_id=current_user.id,
+        user_id=admin.id,
         name=template_data.name,
         type=template_data.type,
         description=template_data.description,
@@ -500,16 +566,11 @@ async def create_template(
 async def update_template(
     template_id: int,
     template_data: EmailTemplateUpdate,
-    current_user: User = Depends(get_current_user),
+    admin: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Update existing email template (only owner can edit)"""
-    result = await db.execute(
-        select(EmailTemplate).where(
-            EmailTemplate.id == template_id,
-            EmailTemplate.user_id == current_user.id,
-        )
-    )
+    """Update existing email template (admin only)"""
+    result = await db.execute(select(EmailTemplate).where(EmailTemplate.id == template_id))
     template = result.scalar_one_or_none()
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
@@ -531,16 +592,11 @@ async def update_template(
 @app.delete("/api/templates/{template_id}")
 async def delete_template(
     template_id: int,
-    current_user: User = Depends(get_current_user),
+    admin: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Delete email template (only owner can delete)"""
-    result = await db.execute(
-        select(EmailTemplate).where(
-            EmailTemplate.id == template_id,
-            EmailTemplate.user_id == current_user.id,
-        )
-    )
+    """Delete email template (admin only)"""
+    result = await db.execute(select(EmailTemplate).where(EmailTemplate.id == template_id))
     template = result.scalar_one_or_none()
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
@@ -548,6 +604,52 @@ async def delete_template(
     await db.delete(template)
     await db.commit()
     return {"message": "Template deleted successfully"}
+
+
+@app.post("/api/emails/send-with-attachments")
+async def send_email_with_attachments(
+    to_address: str = Form(...),
+    subject: str = Form(...),
+    body: str = Form(...),
+    html_body: Optional[str] = Form(None),
+    files: List[UploadFile] = File([]),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Send email with optional file attachments (multipart/form-data)."""
+    email_obj = Email(
+        user_id=current_user.id,
+        from_address=current_user.email,
+        to_address=to_address,
+        subject=subject,
+        body=body,
+        html_body=html_body,
+        is_sent=True,
+    )
+    db.add(email_obj)
+    await db.commit()
+
+    attachments_data: List[tuple] = []
+    for file in files or []:
+        content = await file.read()
+        attachments_data.append((file.filename, file.content_type or "", content))
+
+    msg, sender = _build_and_send_email_message(
+        current_user=current_user,
+        to_address=to_address,
+        subject=subject,
+        body=body,
+        html_body=html_body,
+        attachments=attachments_data or None,
+    )
+
+    send_callable = sender
+    if asyncio.iscoroutinefunction(send_callable):
+        await send_callable()
+    else:
+        send_callable()
+
+    return {"message": "Email sent successfully", "email_id": email_obj.id}
 
 @app.get("/api/emails/inbox", response_model=List[EmailResponse])
 async def get_inbox(
