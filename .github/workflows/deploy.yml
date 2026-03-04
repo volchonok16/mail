@@ -18,6 +18,19 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           port: ${{ secrets.SSH_PORT }}
           script: |
+            set -e
+
+            # Ensure base directory exists
+            if [ ! -d /var/www ]; then
+              mkdir -p /var/www
+            fi
+
+            # Clone repo if it doesn't exist yet
+            if [ ! -d /var/www/mail/.git ]; then
+              rm -rf /var/www/mail || true
+              git clone https://github.com/volchonok16/mail.git /var/www/mail
+            fi
+
             cd /var/www/mail
             git pull
             docker compose up -d --build
