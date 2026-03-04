@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
@@ -48,7 +48,10 @@ export default function UserDashboard() {
   })
   const [showTemplatesModal, setShowTemplatesModal] = useState(false)
   const [templatesTab, setTemplatesTab] = useState<TemplateType>('body')
+  const [selectedTemplateIds, setSelectedTemplateIds] = useState<number[]>([])
   const [attachments, setAttachments] = useState<File[]>([])
+  const [isEditingPreview, setIsEditingPreview] = useState(false)
+  const htmlPreviewRef = useRef<HTMLDivElement | null>(null)
 
   // Fetch inbox
   const { data: inbox } = useQuery({
@@ -156,29 +159,57 @@ export default function UserDashboard() {
 
   const filteredTemplates = (templates || []).filter((t) => t.type === templatesTab)
 
-  const applyTemplate = (template: EmailTemplate) => {
-    if (template.type === 'body') {
-      setComposeData((prev) => ({
-        ...prev,
-        html_body: template.html_content,
-      }))
-    } else if (template.type === 'signature') {
-      setComposeData((prev) => ({
-        ...prev,
-        html_body: prev.html_body
-          ? `${prev.html_body}\n<br />\n${template.html_content}`
-          : template.html_content,
-      }))
-    } else {
-      setComposeData((prev) => ({
-        ...prev,
-        html_body: prev.html_body
-          ? `${prev.html_body}\n<br />\n${template.html_content}`
-          : template.html_content,
-      }))
-    }
-    setShowTemplatesModal(false)
+  const toggleTemplateSelection = (template: EmailTemplate) => {
+    setSelectedTemplateIds((prev) =>
+      prev.includes(template.id) ? prev.filter((id) => id !== template.id) : [...prev, template.id]
+    )
   }
+
+  const applySelectedTemplates = () => {
+    if (!templates || selectedTemplateIds.length === 0) {
+      setShowTemplatesModal(false)
+      return
+    }
+    const selected = templates.filter((t) => selectedTemplateIds.includes(t.id))
+    if (selected.length === 0) {
+      setShowTemplatesModal(false)
+      return
+    }
+
+    setComposeData((prev) => {
+      let html = prev.html_body || ''
+
+      const bodyTemplates = selected.filter((t) => t.type === 'body')
+      const otherTemplates = selected.filter((t) => t.type !== 'body')
+
+      if (bodyTemplates.length > 0) {
+        // Берём первый выбранный шаблон основного письма как базовый контент
+        html = bodyTemplates[0].html_content
+      }
+
+      const appendTemplate = (tpl: EmailTemplate) => {
+        html = html
+          ? `${html}\n<br />\n${tpl.html_content}`
+          : tpl.html_content
+      }
+
+      otherTemplates.forEach(appendTemplate)
+
+      return {
+        ...prev,
+        html_body: html,
+      }
+    })
+
+    setShowTemplatesModal(false)
+    setSelectedTemplateIds([])
+  }
+
+  useEffect(() => {
+    if (!isEditingPreview && htmlPreviewRef.current) {
+      htmlPreviewRef.current.innerHTML = composeData.html_body || ''
+    }
+  }, [composeData.html_body, isEditingPreview])
 
   return (
     <div className="dashboard-container">
@@ -323,7 +354,10 @@ export default function UserDashboard() {
                     <button
                       type="button"
                       className="btn-link"
-                      onClick={() => setShowTemplatesModal(true)}
+                      onClick={() => {
+                        setSelectedTemplateIds([])
+                        setShowTemplatesModal(true)
+                      }}
                     >
                       <FileText size={16} />
                       Использовать шаблон
@@ -368,16 +402,18 @@ export default function UserDashboard() {
                   <div className="html-preview">
                     <div className="html-preview-label">Предпросмотр HTML</div>
                     <div
+                      ref={htmlPreviewRef}
                       className="html-preview-body"
                       contentEditable
                       suppressContentEditableWarning
                       onInput={(e) =>
-                        setComposeData({
-                          ...composeData,
+                        setComposeData((prev) => ({
+                          ...prev,
                           html_body: (e.currentTarget as HTMLDivElement).innerHTML,
-                        })
+                        }))
                       }
-                      dangerouslySetInnerHTML={{ __html: composeData.html_body }}
+                      onFocus={() => setIsEditingPreview(true)}
+                      onBlur={() => setIsEditingPreview(false)}
                     />
                   </div>
                 )}
@@ -429,20 +465,23 @@ export default function UserDashboard() {
               {filteredTemplates.length === 0 ? (
                 <p className="empty-state-text">Нет шаблонов для выбранного типа.</p>
               ) : (
-                filteredTemplates.map((tpl) => (
-                  <div
-                    key={tpl.id}
-                    className="template-item"
-                    onClick={() => applyTemplate(tpl)}
-                  >
-                    <div className="template-main">
-                      <div className="template-name">{tpl.name}</div>
-                      {tpl.description && (
-                        <div className="template-description">{tpl.description}</div>
-                      )}
+                filteredTemplates.map((tpl) => {
+                  const isSelected = selectedTemplateIds.includes(tpl.id)
+                  return (
+                    <div
+                      key={tpl.id}
+                      className={`template-item ${isSelected ? 'selected' : ''}`}
+                      onClick={() => toggleTemplateSelection(tpl)}
+                    >
+                      <div className="template-main">
+                        <div className="template-name">{tpl.name}</div>
+                        {tpl.description && (
+                          <div className="template-description">{tpl.description}</div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))
+                  )
+                })
               )}
             </div>
             <div className="modal-actions">
@@ -451,7 +490,15 @@ export default function UserDashboard() {
                 className="btn-secondary"
                 onClick={() => setShowTemplatesModal(false)}
               >
-                Закрыть
+                Отмена
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={applySelectedTemplates}
+                disabled={selectedTemplateIds.length === 0}
+              >
+                Применить выбранные
               </button>
             </div>
           </div>

@@ -482,6 +482,11 @@ textarea {
   background: rgba(148, 163, 184, 0.18);
 }
 
+.template-item.selected {
+  background: rgba(56, 189, 248, 0.18);
+  border-left: 3px solid var(--color-primary);
+}
+
 .template-main {
   display: flex;
   flex-direction: column;
@@ -496,6 +501,18 @@ textarea {
 .template-description {
   font-size: 0.85rem;
   color: var(--color-text-muted);
+}
+
+/* Ensure compose and templates blocks use full modal width */
+.compose-modal form,
+.compose-modal .form-group {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.templates-modal .templates-list {
+  width: 100%;
+  box-sizing: border-box;
 }
 
 @media (max-width: 768px) {

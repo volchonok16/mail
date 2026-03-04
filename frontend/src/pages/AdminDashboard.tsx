@@ -653,6 +653,15 @@ export default function AdminDashboard() {
                         rows={8}
                         required
                       />
+                      {templateForm.html_content && (
+                        <div className="html-preview">
+                          <div className="html-preview-label">Предпросмотр шаблона</div>
+                          <div
+                            className="html-preview-body"
+                            dangerouslySetInnerHTML={{ __html: templateForm.html_content }}
+                          />
+                        </div>
+                      )}
                     </div>
                     <div className="modal-actions">
                       <button
