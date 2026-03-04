@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
@@ -50,7 +50,7 @@ export default function UserDashboard() {
   const [templatesTab, setTemplatesTab] = useState<TemplateType>('body')
   const [selectedTemplateIds, setSelectedTemplateIds] = useState<number[]>([])
   const [attachments, setAttachments] = useState<File[]>([])
-  const [isEditingPreview, setIsEditingPreview] = useState(false)
+  const htmlPreviewRef = useRef<HTMLDivElement | null>(null)
 
   // Fetch inbox
   const { data: inbox } = useQuery({
@@ -137,11 +137,16 @@ export default function UserDashboard() {
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!composeData.body && !composeData.html_body) {
+    const currentHtml =
+      htmlPreviewRef.current?.innerHTML != null
+        ? htmlPreviewRef.current.innerHTML
+        : composeData.html_body
+
+    if (!composeData.body && !currentHtml) {
       alert('Нужно указать либо текст письма, либо HTML (шаблон).')
       return
     }
-    sendMutation.mutate({ ...composeData, attachments })
+    sendMutation.mutate({ ...composeData, html_body: currentHtml, attachments })
   }
 
   const handleAttachmentsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -389,25 +394,16 @@ export default function UserDashboard() {
                   value={composeData.html_body}
                   onChange={(e) => setComposeData({ ...composeData, html_body: e.target.value })}
                   placeholder="HTML содержимое письма. Сюда подставляются выбранные шаблоны."
-                  rows={10}
+                  rows={6}
                 />
                 <div className="html-preview">
-                  <div className="html-preview-label">Предпросмотр HTML</div>
+                  <div className="html-preview-label">Предпросмотр HTML (можно редактировать)</div>
                   <div
+                    ref={htmlPreviewRef}
                     className="html-preview-body"
                     contentEditable
                     suppressContentEditableWarning
-                    onInput={(e) =>
-                      setComposeData((prev) => ({
-                        ...prev,
-                        html_body: (e.currentTarget as HTMLDivElement).innerHTML,
-                      }))
-                    }
-                    onFocus={() => setIsEditingPreview(true)}
-                    onBlur={() => setIsEditingPreview(false)}
-                    dangerouslySetInnerHTML={
-                      isEditingPreview ? undefined : { __html: composeData.html_body || '' }
-                    }
+                    dangerouslySetInnerHTML={{ __html: composeData.html_body || '' }}
                   />
                 </div>
               </div>
