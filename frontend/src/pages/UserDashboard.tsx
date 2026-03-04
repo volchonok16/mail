@@ -391,27 +391,25 @@ export default function UserDashboard() {
                   placeholder="HTML содержимое письма. Сюда подставляются выбранные шаблоны."
                   rows={10}
                 />
-                {composeData.html_body && (
-                  <div className="html-preview">
-                    <div className="html-preview-label">Предпросмотр HTML</div>
-                    <div
-                      className="html-preview-body"
-                      contentEditable
-                      suppressContentEditableWarning
-                      onInput={(e) =>
-                        setComposeData((prev) => ({
-                          ...prev,
-                          html_body: (e.currentTarget as HTMLDivElement).innerHTML,
-                        }))
-                      }
-                      onFocus={() => setIsEditingPreview(true)}
-                      onBlur={() => setIsEditingPreview(false)}
-                      dangerouslySetInnerHTML={
-                        isEditingPreview ? undefined : { __html: composeData.html_body }
-                      }
-                    />
-                  </div>
-                )}
+                <div className="html-preview">
+                  <div className="html-preview-label">Предпросмотр HTML</div>
+                  <div
+                    className="html-preview-body"
+                    contentEditable
+                    suppressContentEditableWarning
+                    onInput={(e) =>
+                      setComposeData((prev) => ({
+                        ...prev,
+                        html_body: (e.currentTarget as HTMLDivElement).innerHTML,
+                      }))
+                    }
+                    onFocus={() => setIsEditingPreview(true)}
+                    onBlur={() => setIsEditingPreview(false)}
+                    dangerouslySetInnerHTML={
+                      isEditingPreview ? undefined : { __html: composeData.html_body || '' }
+                    }
+                  />
+                </div>
               </div>
 
               <div className="modal-actions">
