@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
@@ -51,7 +51,6 @@ export default function UserDashboard() {
   const [selectedTemplateIds, setSelectedTemplateIds] = useState<number[]>([])
   const [attachments, setAttachments] = useState<File[]>([])
   const [isEditingPreview, setIsEditingPreview] = useState(false)
-  const htmlPreviewRef = useRef<HTMLDivElement | null>(null)
 
   // Fetch inbox
   const { data: inbox } = useQuery({
@@ -204,12 +203,6 @@ export default function UserDashboard() {
     setShowTemplatesModal(false)
     setSelectedTemplateIds([])
   }
-
-  useEffect(() => {
-    if (!isEditingPreview && htmlPreviewRef.current) {
-      htmlPreviewRef.current.innerHTML = composeData.html_body || ''
-    }
-  }, [composeData.html_body, isEditingPreview])
 
   return (
     <div className="dashboard-container">
@@ -402,7 +395,6 @@ export default function UserDashboard() {
                   <div className="html-preview">
                     <div className="html-preview-label">Предпросмотр HTML</div>
                     <div
-                      ref={htmlPreviewRef}
                       className="html-preview-body"
                       contentEditable
                       suppressContentEditableWarning
@@ -414,6 +406,9 @@ export default function UserDashboard() {
                       }
                       onFocus={() => setIsEditingPreview(true)}
                       onBlur={() => setIsEditingPreview(false)}
+                      dangerouslySetInnerHTML={
+                        isEditingPreview ? undefined : { __html: composeData.html_body }
+                      }
                     />
                   </div>
                 )}
