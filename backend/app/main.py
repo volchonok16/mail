@@ -3,15 +3,24 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from datetime import timedelta
-from typing import List
+from typing import List, Optional
 import io
 import uuid
 
 from app.database import get_db, engine, Base, AsyncSessionLocal
-from app.models import User, Email
+from app.models import User, Email, EmailTemplate
 from app.schemas import (
-    UserCreate, UserResponse, UserUpdate, UserAdminUpdate,
-    LoginRequest, Token, EmailCreate, EmailResponse
+    UserCreate,
+    UserResponse,
+    UserUpdate,
+    UserAdminUpdate,
+    LoginRequest,
+    Token,
+    EmailCreate,
+    EmailResponse,
+    EmailTemplateCreate,
+    EmailTemplateUpdate,
+    EmailTemplateResponse,
 )
 from app.auth import (
     verify_password, get_password_hash, create_access_token,
@@ -449,6 +458,96 @@ async def send_email(
         )
     
     return {"message": "Email sent successfully", "email_id": email_obj.id}
+
+
+@app.get("/api/templates", response_model=List[EmailTemplateResponse])
+async def list_templates(
+    template_type: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List email templates for current user (optionally filtered by type)"""
+    query = select(EmailTemplate).where(EmailTemplate.user_id == current_user.id)
+    if template_type:
+        query = query.where(EmailTemplate.type == template_type)
+
+    result = await db.execute(query.order_by(EmailTemplate.created_at.desc()))
+    templates = result.scalars().all()
+    return templates
+
+
+@app.post("/api/templates", response_model=EmailTemplateResponse)
+async def create_template(
+    template_data: EmailTemplateCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a new email template for current user"""
+    template = EmailTemplate(
+        user_id=current_user.id,
+        name=template_data.name,
+        type=template_data.type,
+        description=template_data.description,
+        html_content=template_data.html_content,
+    )
+    db.add(template)
+    await db.commit()
+    await db.refresh(template)
+    return template
+
+
+@app.put("/api/templates/{template_id}", response_model=EmailTemplateResponse)
+async def update_template(
+    template_id: int,
+    template_data: EmailTemplateUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update existing email template (only owner can edit)"""
+    result = await db.execute(
+        select(EmailTemplate).where(
+            EmailTemplate.id == template_id,
+            EmailTemplate.user_id == current_user.id,
+        )
+    )
+    template = result.scalar_one_or_none()
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    if template_data.name is not None:
+        template.name = template_data.name
+    if template_data.type is not None:
+        template.type = template_data.type
+    if template_data.description is not None:
+        template.description = template_data.description
+    if template_data.html_content is not None:
+        template.html_content = template_data.html_content
+
+    await db.commit()
+    await db.refresh(template)
+    return template
+
+
+@app.delete("/api/templates/{template_id}")
+async def delete_template(
+    template_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete email template (only owner can delete)"""
+    result = await db.execute(
+        select(EmailTemplate).where(
+            EmailTemplate.id == template_id,
+            EmailTemplate.user_id == current_user.id,
+        )
+    )
+    template = result.scalar_one_or_none()
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    await db.delete(template)
+    await db.commit()
+    return {"message": "Template deleted successfully"}
 
 @app.get("/api/emails/inbox", response_model=List[EmailResponse])
 async def get_inbox(
