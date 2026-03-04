@@ -29,7 +29,7 @@ jobs:
         run: npm run build
 
       - name: Upload backend (and compose) to server
-        uses: burnett01/rsync-deployments@v7.0.1
+        uses: Burnett01/rsync-deployments@v8
         with:
           switches: -avz --delete --exclude='.git' --exclude='frontend/node_modules' --exclude='frontend/dist'
           path: .
@@ -40,7 +40,7 @@ jobs:
           remote_key: ${{ secrets.SSH_KEY }}
 
       - name: Upload frontend build to server
-        uses: burnett01/rsync-deployments@v7.0.1
+        uses: Burnett01/rsync-deployments@v8
         with:
           switches: -avz --delete
           path: frontend/dist/
