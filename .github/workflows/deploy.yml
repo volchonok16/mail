@@ -32,4 +32,4 @@ jobs:
 
             cd /var/www/mail/mail
             git pull
-            docker compose up -d --build
+            echo "${{ secrets.SUDO_PASSWORD }}" | sudo -S docker compose up -d --build
