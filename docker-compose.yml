@@ -1,0 +1,102 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: mail_postgres
+    environment:
+      POSTGRES_USER: mailuser
+      POSTGRES_PASSWORD: mailpass
+      POSTGRES_DB: maildb
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "17432:5432"  # PostgreSQL (очень нестандартный порт)
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mailuser -d maildb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mail_network
+
+  # MinIO Object Storage
+  minio:
+    image: minio/minio:latest
+    container_name: mail_minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio_data:/data
+    ports:
+      - "17900:9000"  # MinIO API (очень нестандартный порт)
+      - "17901:9001"  # MinIO Console (очень нестандартный порт)
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - mail_network
+
+  # Backend API + SMTP/IMAP Server
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mail_backend
+    environment:
+      DATABASE_URL: postgresql+asyncpg://mailuser:mailpass@postgres:5432/maildb
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_BUCKET: avatars
+      MINIO_SECURE: "false"
+      SECRET_KEY: your-secret-key-change-in-production-12345
+      MAIL_DOMAIN: alexol.io
+      DEFAULT_ADMIN_EMAIL: admin@alexol.io
+      DEFAULT_ADMIN_PASSWORD: Gord078134Alexol!9256
+      # Свой SMTP: отправка напрямую по MX (без SendGrid). Для relay задайте в .env:
+      # SMTP_RELAY_ENABLED=true, SMTP_RELAY_HOST=..., SMTP_RELAY_PASSWORD=...
+      SMTP_RELAY_ENABLED: "false"
+      # Sync URL для аутентификации на порту 587 (логин/пароль из БД)
+      DATABASE_URL_SYNC: postgresql://mailuser:mailpass@postgres:5432/maildb
+    ports:
+      - "127.0.0.1:17000:8000"  # API только для localhost (nginx проксирует)
+      - "0.0.0.0:25:25"         # SMTP приём (публичный - для всех почтовых серверов)
+      - "0.0.0.0:587:587"       # SMTP Submission (публичный - для почтовых клиентов)
+      - "0.0.0.0:143:143"       # IMAP (публичный - для почтовых клиентов)
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - mail_network
+    restart: unless-stopped
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: mail_frontend
+    ports:
+      - "127.0.0.1:17080:80"  # Frontend только для localhost (nginx проксирует)
+    depends_on:
+      - backend
+    networks:
+      - mail_network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  minio_data:
+
+networks:
+  mail_network:
+    driver: bridge
+

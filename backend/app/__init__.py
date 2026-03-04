@@ -1,0 +1,2 @@
+# FastAPI Mail Server
+
