@@ -137,7 +137,8 @@ export default function UserDashboard() {
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault()
-    const currentHtml =
+
+    let currentHtml =
       htmlPreviewRef.current?.innerHTML != null
         ? htmlPreviewRef.current.innerHTML
         : composeData.html_body
@@ -146,6 +147,39 @@ export default function UserDashboard() {
       alert('Нужно указать либо текст письма, либо HTML (шаблон).')
       return
     }
+
+    if (currentHtml) {
+      const wrapper = document.createElement('div')
+      wrapper.innerHTML = currentHtml
+
+      const anchors = Array.from(wrapper.querySelectorAll('a')) as HTMLAnchorElement[]
+      anchors.forEach((a) => {
+        const text = (a.textContent || '').trim()
+        if (!text) return
+
+        const phoneLike = /^[+\d()\-\s]+$/.test(text)
+        const emailLike = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text)
+
+        if (phoneLike) {
+          const sanitized = text.replace(/[^\d+]/g, '')
+          if (sanitized) {
+            a.href = `tel:${sanitized}`
+          }
+        } else if (emailLike) {
+          a.href = `mailto:${text}`
+        } else {
+          // Для веб-сайтов: если нет схемы, добавляем https://
+          let hrefText = text
+          if (!/^https?:\/\//i.test(hrefText)) {
+            hrefText = `https://${hrefText}`
+          }
+          a.href = hrefText
+        }
+      })
+
+      currentHtml = wrapper.innerHTML
+    }
+
     sendMutation.mutate({ ...composeData, html_body: currentHtml, attachments })
   }
 
