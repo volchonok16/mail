@@ -20,17 +20,16 @@ jobs:
           script: |
             set -e
 
-            # Ensure base directory exists
-            if [ ! -d /var/www ]; then
-              mkdir -p /var/www
+            # Repo ожидается в /var/www/mail/mail
+            # Если его нет — просто клонируем (без удаления директорий, чтобы не ловить Permission denied)
+            if [ ! -d /var/www/mail/mail/.git ]; then
+              mkdir -p /var/www/mail
+              cd /var/www/mail
+              if [ ! -d mail ]; then
+                git clone https://github.com/volchonok16/mail.git mail
+              fi
             fi
 
-            # Clone repo if it doesn't exist yet
-            if [ ! -d /var/www/mail/.git ]; then
-              rm -rf /var/www/mail || true
-              git clone https://github.com/volchonok16/mail.git /var/www/mail
-            fi
-
-            cd /var/www/mail
+            cd /var/www/mail/mail
             git pull
             docker compose up -d --build
