@@ -26,11 +26,22 @@ jobs:
         working-directory: frontend
         run: npm run build
 
-      - name: Upload backend (and compose) to server
+      - name: Upload backend to server
         uses: Burnett01/rsync-deployments@v8
         with:
-          switches: -avz --delete --exclude='.git' --exclude='frontend/node_modules' --exclude='frontend/dist'
-          path: .
+          switches: -avz --delete
+          path: backend/
+          remote_path: /home/${{ secrets.SSH_USER }}/mail-deploy/backend
+          remote_host: ${{ secrets.SSH_HOST }}
+          remote_user: ${{ secrets.SSH_USER }}
+          remote_port: ${{ secrets.SSH_PORT }}
+          remote_key: ${{ secrets.SSH_KEY }}
+
+      - name: Upload docker-compose to server
+        uses: Burnett01/rsync-deployments@v8
+        with:
+          switches: -avz
+          path: docker-compose.yml
           remote_path: /home/${{ secrets.SSH_USER }}/mail-deploy
           remote_host: ${{ secrets.SSH_HOST }}
           remote_user: ${{ secrets.SSH_USER }}
@@ -62,10 +73,16 @@ jobs:
             BACKEND_SRC="$HOME/mail-deploy"
             FRONTEND_SRC="$HOME/mail-html"
 
-            # Перекладываем файлы в /var/www/mail под sudo и запускаем docker compose
-            echo "${{ secrets.SUDO_PASSWORD }}" | sudo -S mkdir -p /var/www/mail /var/www/mail/html
+            # Перекладываем только backend и docker-compose.yml в /var/www/mail под sudo
+            echo "${{ secrets.SUDO_PASSWORD }}" | sudo -S mkdir -p /var/www/mail/backend /var/www/mail/html
 
-            echo "${{ secrets.SUDO_PASSWORD }}" | sudo -S rsync -avz --delete "$BACKEND_SRC"/ /var/www/mail/
+            # Синхронизируем backend (с удалением лишних файлов только внутри backend/)
+            echo "${{ secrets.SUDO_PASSWORD }}" | sudo -S rsync -avz --delete "$BACKEND_SRC/backend"/ /var/www/mail/backend/
+
+            # Обновляем docker-compose.yml
+            echo "${{ secrets.SUDO_PASSWORD }}" | sudo -S rsync -avz "$BACKEND_SRC/docker-compose.yml" /var/www/mail/docker-compose.yml
+
+            # Обновляем собранный frontend в html (старая статика чистится)
             echo "${{ secrets.SUDO_PASSWORD }}" | sudo -S rsync -avz --delete "$FRONTEND_SRC"/ /var/www/mail/html/
 
             cd /var/www/mail
