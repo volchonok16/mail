@@ -156,8 +156,8 @@ class CustomSMTPHandler:
 
 def _run_smtp_servers(handler, tls_ctx, loop):
     """В одном потоке поднимает три слушателя: 25, 587 (STARTTLS) и 465 (SSL)."""
-    bind_host = settings.SMTP_HOST          # адрес привязки (0.0.0.0)
-    smtp_hostname = settings.MAIL_DOMAIN    # имя в SMTP-баннере (mail.alexol.io)
+    bind_host = settings.SMTP_HOST              # адрес привязки (0.0.0.0)
+    smtp_hostname = settings.smtp_hostname      # имя в SMTP-баннере (mail.alexol.io)
     port_25 = settings.SMTP_PORT
     port_587 = settings.SMTP_SUBMISSION_PORT
     port_465 = getattr(settings, 'SMTP_SSL_PORT', 465)

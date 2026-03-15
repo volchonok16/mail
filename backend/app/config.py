@@ -45,6 +45,12 @@ class Settings(BaseSettings):
     
     # Domain
     MAIL_DOMAIN: str = "alexol.io"
+    # Hostname advertised in SMTP/IMAP banners (обычно mail.MAIL_DOMAIN)
+    MAIL_HOSTNAME: Optional[str] = None
+
+    @property
+    def smtp_hostname(self) -> str:
+        return self.MAIL_HOSTNAME or f"mail.{self.MAIL_DOMAIN}"
     
     # Default Admin
     DEFAULT_ADMIN_EMAIL: str = "admin@alexol.io"
