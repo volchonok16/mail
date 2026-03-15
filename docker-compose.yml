@@ -64,6 +64,11 @@ services:
       SMTP_RELAY_ENABLED: "false"
       # Sync URL для аутентификации на порту 587 (логин/пароль из БД)
       DATABASE_URL_SYNC: postgresql://mailuser:mailpass@postgres:5432/maildb
+      # Let's Encrypt сертификаты для SMTP/IMAP TLS (порты 587, 993)
+      SMTP_TLS_CERT_FILE: "/etc/letsencrypt/live/mail.alexol.io/fullchain.pem"
+      SMTP_TLS_KEY_FILE: "/etc/letsencrypt/live/mail.alexol.io/privkey.pem"
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt:ro
     ports:
       - "127.0.0.1:17000:8000"  # API только для localhost (nginx проксирует)
       - "0.0.0.0:25:25"         # SMTP приём (публичный - для всех почтовых серверов)
