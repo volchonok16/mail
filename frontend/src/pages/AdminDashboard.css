@@ -4,12 +4,13 @@
 }
 
 .admin-nav {
-  background: rgba(12, 15, 22, 0.95);
+  background: var(--color-surface);
   padding: 1rem 2rem;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
   display: flex;
   justify-content: space-between;
   align-items: center;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .nav-brand h1 {
@@ -140,12 +141,13 @@
 }
 
 .modal {
-  background: rgba(12, 15, 22, 0.98);
+  background: var(--color-surface);
   padding: 2rem;
   border-radius: 16px;
   width: 100%;
   max-width: 500px;
   color: var(--color-text);
+  border: 1px solid var(--color-border);
 }
 
 .modal h3 {
@@ -216,10 +218,11 @@
 }
 
 .users-table {
-  background: rgba(12, 15, 22, 0.95);
+  background: var(--color-surface);
   border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   overflow: hidden;
+  border: 1px solid var(--color-border);
 }
 
 .loading {
@@ -234,7 +237,7 @@ table {
 }
 
 thead {
-  background: rgba(15, 23, 42, 0.85);
+  background: var(--color-surface-deep);
 }
 
 th {
@@ -370,7 +373,7 @@ tbody tr:hover {
 
 .checkbox-label span {
   font-weight: 500;
-  color: #333;
+  color: var(--color-text);
 }
 
 .templates-manage-modal {
@@ -392,10 +395,10 @@ tbody tr:hover {
 
 .templates-tabs {
   display: inline-flex;
-  background: rgba(15, 23, 42, 0.9);
+  background: var(--color-surface-deep);
   border-radius: 999px;
   padding: 0.25rem;
-  border: 1px solid rgba(148, 163, 184, 0.4);
+  border: 1px solid var(--color-border);
 }
 
 .templates-tabs button {
@@ -423,8 +426,8 @@ tbody tr:hover {
 
 .templates-list {
   border-radius: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-deep);
   max-height: 340px;
   overflow-y: auto;
 }
@@ -491,9 +494,9 @@ tbody tr:hover {
 
 .template-form {
   border-radius: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.3);
+  border: 1px solid var(--color-border);
   padding: 1.25rem 1.5rem;
-  background: rgba(15, 23, 42, 0.95);
+  background: var(--color-surface-card);
 }
 
 .template-form h4 {
@@ -504,10 +507,10 @@ tbody tr:hover {
 .template-type-group {
   display: inline-flex;
   gap: 0.5rem;
-  background: rgba(15, 23, 42, 0.9);
+  background: var(--color-surface-deep);
   border-radius: 999px;
   padding: 0.25rem;
-  border: 1px solid rgba(148, 163, 184, 0.4);
+  border: 1px solid var(--color-border);
 }
 
 .type-pill {
