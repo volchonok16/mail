@@ -156,45 +156,47 @@ class CustomSMTPHandler:
 
 def _run_smtp_servers(handler, tls_ctx, loop):
     """В одном потоке поднимает три слушателя: 25, 587 (STARTTLS) и 465 (SSL)."""
-    host = settings.SMTP_HOST
+    bind_host = settings.SMTP_HOST          # адрес привязки (0.0.0.0)
+    smtp_hostname = settings.MAIL_DOMAIN    # имя в SMTP-баннере (mail.alexol.io)
     port_25 = settings.SMTP_PORT
     port_587 = settings.SMTP_SUBMISSION_PORT
     port_465 = getattr(settings, 'SMTP_SSL_PORT', 465)
 
     def factory_25():
-        return SMTP(handler, hostname=host)
+        return SMTP(handler, hostname=smtp_hostname)
 
     def factory_587():
         return SMTP(
             handler,
-            hostname=host,
+            hostname=smtp_hostname,
             authenticator=handler._authenticator,
             require_starttls=(tls_ctx is not None),
             tls_context=tls_ctx,
         )
 
     def factory_465():
-        # Без require_starttls — SSL уже обёрнут на уровне TCP
+        # SSL уже обёрнут на уровне TCP — внутри plain SMTP
         return SMTP(
             handler,
-            hostname=host,
+            hostname=smtp_hostname,
             authenticator=handler._authenticator,
             require_starttls=False,
             tls_context=None,
         )
 
     async def run():
-        server_25 = await loop.create_server(factory_25, host, port_25)
-        server_587 = await loop.create_server(factory_587, host, port_587)
-        logger.info("SMTP (receive) started on %s:%s", host, port_25)
+        server_25 = await loop.create_server(factory_25, bind_host, port_25)
+        server_587 = await loop.create_server(factory_587, bind_host, port_587)
+        logger.info("SMTP (receive) started on %s:%s", bind_host, port_25)
         logger.info(
-            "SMTP (submission) started on %s:%s (auth + %s)",
-            host, port_587, "STARTTLS" if tls_ctx else "no TLS",
+            "SMTP (submission) started on %s:%s hostname=%s (auth + %s)",
+            bind_host, port_587, smtp_hostname, "STARTTLS" if tls_ctx else "no TLS",
         )
         servers = [server_25, server_587]
         if tls_ctx:
-            server_465 = await loop.create_server(factory_465, host, port_465, ssl=tls_ctx)
-            logger.info("SMTP (SSL) started on %s:%s (auth + SSL)", host, port_465)
+            server_465 = await loop.create_server(factory_465, bind_host, port_465, ssl=tls_ctx)
+            logger.info("SMTP (SSL) started on %s:%s hostname=%s (auth + SSL)",
+                        bind_host, port_465, smtp_hostname)
             servers.append(server_465)
         return tuple(servers)
 

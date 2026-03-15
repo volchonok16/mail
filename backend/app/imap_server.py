@@ -280,7 +280,7 @@ class IMAPSession:
 
     # ------------------------------------------------------------------
     async def handle(self):
-        await self._send('* OK IMAP4rev1 Service Ready')
+        await self._send(f'* OK {settings.MAIL_DOMAIN} IMAP4rev1 Service Ready')
         try:
             while self.state != self.LOGOUT:
                 line = await asyncio.wait_for(self.reader.readline(), timeout=300)
