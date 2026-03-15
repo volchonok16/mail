@@ -29,6 +29,7 @@ from app.auth import (
 )
 from app.config import settings
 from app.smtp_server import smtp_server
+from app.imap_server import imap_server
 from app.minio_client import minio_client
 import smtplib
 import httpx
@@ -73,12 +74,15 @@ async def startup_event():
     
     # Start SMTP server
     smtp_server.start()
+    # Start IMAP server
+    imap_server.start()
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    """Stop SMTP server"""
+    """Stop SMTP and IMAP servers"""
     smtp_server.stop()
     await smtp_server.cleanup()
+    imap_server.stop()
 
 # Auth endpoints
 @app.post("/api/auth/login", response_model=Token)

@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     # IMAP Settings
     IMAP_HOST: str = "0.0.0.0"
     IMAP_PORT: int = 143
+    IMAP_SSL_PORT: int = 993
     
     # Domain
     MAIL_DOMAIN: str = "alexol.io"
