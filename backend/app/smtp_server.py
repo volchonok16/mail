@@ -145,10 +145,11 @@ class CustomSMTPHandler:
 
 
 def _run_smtp_servers(handler, tls_ctx, loop):
-    """В одном потоке поднимает два слушателя: 25 и 587."""
+    """В одном потоке поднимает три слушателя: 25, 587 (STARTTLS) и 465 (SSL)."""
     host = settings.SMTP_HOST
     port_25 = settings.SMTP_PORT
     port_587 = settings.SMTP_SUBMISSION_PORT
+    port_465 = getattr(settings, 'SMTP_SSL_PORT', 465)
 
     def factory_25():
         return SMTP(handler, hostname=host)
@@ -162,6 +163,16 @@ def _run_smtp_servers(handler, tls_ctx, loop):
             tls_context=tls_ctx,
         )
 
+    def factory_465():
+        # Без require_starttls — SSL уже обёрнут на уровне TCP
+        return SMTP(
+            handler,
+            hostname=host,
+            authenticator=handler._authenticator,
+            require_starttls=False,
+            tls_context=None,
+        )
+
     async def run():
         server_25 = await loop.create_server(factory_25, host, port_25)
         server_587 = await loop.create_server(factory_587, host, port_587)
@@ -170,13 +181,18 @@ def _run_smtp_servers(handler, tls_ctx, loop):
             "SMTP (submission) started on %s:%s (auth + %s)",
             host, port_587, "STARTTLS" if tls_ctx else "no TLS",
         )
-        return server_25, server_587
+        servers = [server_25, server_587]
+        if tls_ctx:
+            server_465 = await loop.create_server(factory_465, host, port_465, ssl=tls_ctx)
+            logger.info("SMTP (SSL) started on %s:%s (auth + SSL)", host, port_465)
+            servers.append(server_465)
+        return tuple(servers)
 
     return loop.run_until_complete(run())
 
 
 class SMTPServer:
-    """Единый SMTP: порт 25 (приём) и порт 587 (Submission с auth + STARTTLS). Один поток, один loop."""
+    """SMTP: порт 25 (приём), 587 (STARTTLS), 465 (SSL). Один поток, один loop."""
 
     def __init__(self):
         self._loop = None
@@ -211,7 +227,7 @@ class SMTPServer:
             self._loop.call_soon_threadsafe(self._loop.stop)
             if self._thread:
                 self._thread.join(timeout=5)
-            logger.info("SMTP (25 and 587) stopped")
+            logger.info("SMTP servers stopped")
 
 
 smtp_server = SMTPServer()

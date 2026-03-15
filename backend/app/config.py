@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     SMTP_HOST: str = "0.0.0.0"
     SMTP_PORT: int = 25
     SMTP_SUBMISSION_PORT: int = 587
+    SMTP_SSL_PORT: int = 465
     # TLS для порта 587 (Submission). Если не заданы — генерируется self-signed для разработки.
     SMTP_TLS_CERT_FILE: Optional[str] = None  # путь к cert.pem
     SMTP_TLS_KEY_FILE: Optional[str] = None  # путь к key.pem
