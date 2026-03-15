@@ -61,6 +61,33 @@
   border-color: var(--color-primary);
 }
 
+.password-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-wrapper input {
+  padding-right: 2.75rem;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 0.75rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  display: flex;
+  align-items: center;
+  padding: 0;
+  transition: color 0.2s;
+}
+
+.password-toggle:hover {
+  color: var(--color-primary);
+}
+
 .error {
   color: #fecaca;
   background: rgba(248, 113, 113, 0.12);

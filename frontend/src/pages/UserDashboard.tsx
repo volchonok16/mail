@@ -150,16 +150,19 @@ export default function UserDashboard() {
 
       const anchors = Array.from(wrapper.querySelectorAll('a')) as HTMLAnchorElement[]
       anchors.forEach((a) => {
-        const text = (a.textContent || '').trim()
+        const raw = a.textContent || ''
+        const text = raw.trim()
         if (!text) return
 
-        const phoneLike = /^[+\d()\-\s]+$/.test(text)
+        const digitsOnly = text.replace(/\D+/g, '')
         const emailLike = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text)
+        const looksLikePhone = digitsOnly.length >= 5 && !text.includes('@')
 
-        if (phoneLike) {
-          const sanitized = text.replace(/[^\d+]/g, '')
-          if (sanitized) {
-            a.href = `tel:${sanitized}`
+        if (looksLikePhone) {
+          const hasPlus = text.includes('+')
+          const telValue = hasPlus ? `+${digitsOnly}` : digitsOnly
+          if (telValue) {
+            a.href = `tel:${telValue}`
           }
         } else if (emailLike) {
           a.href = `mailto:${text}`
