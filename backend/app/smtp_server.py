@@ -29,11 +29,12 @@ def _get_sync_database_url() -> str:
 
 
 def _make_tls_context():
-    """TLS-контекст для порта 587. Если сертификаты не заданы — self-signed для разработки."""
+    """TLS-контекст для порта 587/465. Если сертификаты не заданы — self-signed для разработки."""
     if settings.SMTP_TLS_CERT_FILE and settings.SMTP_TLS_KEY_FILE:
         if os.path.isfile(settings.SMTP_TLS_CERT_FILE) and os.path.isfile(settings.SMTP_TLS_KEY_FILE):
             ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
             ctx.load_cert_chain(settings.SMTP_TLS_CERT_FILE, settings.SMTP_TLS_KEY_FILE)
+            logger.info("SMTP TLS: using configured cert %s", settings.SMTP_TLS_CERT_FILE)
             return ctx
     # Self-signed для разработки (клиенты могут ругаться, но подключение работает)
     try:
@@ -78,23 +79,32 @@ class CustomSMTPHandler:
         self._SyncSession = sessionmaker(self._sync_engine, class_=Session, expire_on_commit=False)
 
     def _authenticator(self, server, session, envelope, mechanism: str, auth_data):
-        """Проверка логина/пароля для порта 587 (sync, т.к. вызывается из aiosmtpd)."""
+        """Проверка логина/пароля для портов 587/465 (sync, т.к. вызывается из aiosmtpd)."""
         if not isinstance(auth_data, LoginPassword):
+            logger.warning("SMTP auth: unexpected auth_data type %s", type(auth_data))
             return AuthResult(success=False)
         login = (auth_data.login or "").strip()
         password = auth_data.password or ""
+        logger.info("SMTP auth attempt: login=%r mechanism=%s", login, mechanism)
         if not login or not password:
+            logger.warning("SMTP auth: empty login or password for %r", login)
             return AuthResult(success=False)
         try:
             with self._SyncSession() as db:
                 row = db.execute(select(User).where(User.email == login)).scalar_one_or_none()
-                if not row or not row.is_active:
+                if not row:
+                    logger.warning("SMTP auth: user not found: %r", login)
+                    return AuthResult(success=False)
+                if not row.is_active:
+                    logger.warning("SMTP auth: user inactive: %r", login)
                     return AuthResult(success=False)
                 if verify_password(password, row.hashed_password):
+                    logger.info("SMTP auth: success for %r", login)
                     return AuthResult(success=True, auth_data=auth_data)
+                logger.warning("SMTP auth: wrong password for %r", login)
                 return AuthResult(success=False)
         except Exception as e:
-            logger.exception("Auth error for %s: %s", login, e)
+            logger.exception("SMTP auth error for %s: %s", login, e)
             return AuthResult(success=False)
 
     async def handle_DATA(self, server, session, envelope):
