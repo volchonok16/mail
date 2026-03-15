@@ -292,7 +292,13 @@ class IMAPSession:
                 logger.debug('IMAP < %s', line)
                 await self._dispatch(line)
         except asyncio.TimeoutError:
-            await self._send('* BYE Autologout; idle for too long')
+            try:
+                await self._send('* BYE Autologout; idle for too long')
+            except Exception:
+                pass
+        except (ConnectionResetError, BrokenPipeError, asyncio.IncompleteReadError):
+            # Client closed connection — normal for iOS/Outlook
+            logger.debug('IMAP: client disconnected')
         except Exception as exc:
             logger.error('IMAP session error: %s', exc, exc_info=True)
         finally:
@@ -304,8 +310,11 @@ class IMAPSession:
 
     async def _send(self, data: str):
         logger.debug('IMAP > %s', data[:200])
-        self.writer.write((data + '\r\n').encode('utf-8'))
-        await self.writer.drain()
+        try:
+            self.writer.write((data + '\r\n').encode('utf-8'))
+            await self.writer.drain()
+        except (ConnectionResetError, BrokenPipeError, asyncio.IncompleteReadError):
+            raise  # пробрасываем вверх для обработки в handle()
 
     async def _dispatch(self, line: str):
         m = re.match(r'^(\S+)\s+(\S+)(.*)', line)
